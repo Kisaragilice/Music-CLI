@@ -32,9 +32,9 @@ class MusicApp(App):
     DataTable { height: 1fr; background: $surface; }
     DataTable > .datatable--header { background: $primary 30%; text-style: bold; }
     DataTable > .datatable--cursor { background: $accent 30%; }
-    #playback { height: 7; border: heavy $accent; background: $panel; padding: 0 1; layout: vertical; }
+    #playback { height: 9; border: heavy $accent; background: $panel; padding: 0 1; layout: vertical; }
     #playback_top { height: 3; layout: horizontal; }
-    #viz { height: 2; color: $accent; text-align: center; display: none; }
+    #viz { height: 6; color: $accent; text-align: center; display: none; }
     #viz.enabled { display: block; }
     #now_playing { color: $success; text-style: bold; width: 1fr; }
     #progress { width: 1fr; color: $accent; }
