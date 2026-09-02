@@ -58,6 +58,61 @@ def search_ytdlp(query: str, limit: int = 10) -> list[Track]:
         return tracks
 
 
+def _entries_to_tracks(entries, exclude_ids: set[str] | None = None) -> list[Track]:
+    tracks: list[Track] = []
+    for e in entries or []:
+        if not e:
+            continue
+        vid = e.get("id", "")
+        if exclude_ids and vid in exclude_ids:
+            continue
+        title = e.get("title", vid)
+        channel = e.get("uploader") or e.get("channel") or e.get("uploader_id")
+        duration = e.get("duration")
+        thumb = None
+        thumbs = e.get("thumbnails")
+        if thumbs:
+            thumb = thumbs[-1].get("url")
+        url = e.get("url") or (f"https://www.youtube.com/watch?v={vid}" if vid else "")
+        if vid and not url.startswith("http"):
+            url = f"https://www.youtube.com/watch?v={vid}"
+        tracks.append(Track(id=vid, title=title, channel=channel, duration=duration, url=url, thumbnail=thumb))
+    return tracks
+
+
+def get_mix_tracks(track: Track, limit: int = 10, exclude_ids: set[str] | None = None) -> list[Track]:
+    """Try YouTube Mix (RD) then fallback to ytsearch mix for diverse autoplay."""
+    import yt_dlp
+
+    exclude = set(exclude_ids or set())
+    exclude.add(track.id)
+
+    # Try RD mix playlist
+    ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True, "skip_download": True}
+    mix_url = f"https://www.youtube.com/watch?v={track.id}&list=RD{track.id}"
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(mix_url, download=False)
+            entries = info.get("entries") if info else None
+            if entries:
+                tracks = _entries_to_tracks(entries, exclude)
+                # first entry is often the seed itself, skip if same id
+                tracks = [t for t in tracks if t.id != track.id]
+                if len(tracks) >= 3:
+                    return tracks[:limit]
+    except Exception:
+        pass
+
+    # Fallback: ytsearch mix
+    query = f"{track.title} {track.channel or ''} mix".strip()
+    try:
+        tracks = search_ytdlp(query, limit=limit + 5)
+        tracks = [t for t in tracks if t.id not in exclude]
+        return tracks[:limit]
+    except Exception:
+        return []
+
+
 # CLI helper: print json
 def search_json(query: str, limit: int = 10) -> str:
     tracks = search_ytdlp(query, limit)

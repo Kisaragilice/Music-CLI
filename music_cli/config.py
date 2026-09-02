@@ -29,9 +29,16 @@ class UIConfig:
 
 
 @dataclass
+class QueueConfig:
+    autoplay: bool = True
+    mix_limit: int = 10
+
+
+@dataclass
 class AppConfig:
     player: PlayerConfig = field(default_factory=PlayerConfig)
     ui: UIConfig = field(default_factory=UIConfig)
+    queue: QueueConfig = field(default_factory=QueueConfig)
     client_port: int = 8080
 
     @classmethod
@@ -54,6 +61,11 @@ class AppConfig:
                     cfg.ui.theme = str(u["theme"])
                 if "page_size" in u:
                     cfg.ui.page_size = int(u["page_size"])
+                q = data.get("queue", {})
+                if "autoplay" in q:
+                    cfg.queue.autoplay = bool(q["autoplay"])
+                if "mix_limit" in q:
+                    cfg.queue.mix_limit = int(q["mix_limit"])
             except Exception:
                 pass
         return cfg

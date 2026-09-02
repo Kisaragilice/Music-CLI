@@ -10,13 +10,13 @@ from textual.widgets import DataTable, Footer, Header, Input, Label, ProgressBar
 from .config import AppConfig
 from .player import MpvPlayer
 from .queue import Queue
-from .search import Track, _fmt_duration, search_ytdlp
+from .search import Track, _fmt_duration, get_mix_tracks, search_ytdlp
 
 
 HELP_TEXT = """\
-[q] quit  [?] help  [enter] play  [space] pause  [n] next  [p] prev
-[+/-] vol  [</>] seek 5s  [z] queue  [s] shuffle  [r] repeat  [c] clear queue
-[/] focus search  [j/k] nav  [G/gg] top/bottom
+[q] quit  [?] help  [enter] play(single+mix)  [A] play context  [space] pause  [n] next  [p] prev
+[+/-] vol  [</>] seek 5s  [z] queue  [s] shuffle  [r] repeat  [c] clear  [a] autoplay toggle
+[/] focus search  [j/k] nav
 """
 
 
@@ -45,6 +45,8 @@ class MusicApp(App):
         Binding("r", "toggle_repeat", "Repeat"),
         Binding("c", "clear_queue", "Clear"),
         Binding("slash", "focus_search", "Search"),
+        Binding("a", "toggle_autoplay", "Autoplay"),
+        Binding("A", "play_context", "Play context"),
     ]
 
     def __init__(self, config: AppConfig | None = None):
@@ -54,6 +56,9 @@ class MusicApp(App):
         self.queue = Queue()
         self.search_results: list[Track] = []
         self.show_help = False
+        self._was_playing = False
+        self._eof_handled = False
+        self._autoplay_fetching = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -123,15 +128,44 @@ class MusicApp(App):
             self._play_current()
             return
         track = self.search_results[idx]
-        # add all results to queue if queue empty, or just play selected
+        # single-mode: put selected track as current, insert after current
         if not self.queue.items:
-            for t in self.search_results:
-                self.queue.add(t)
-            self.queue.set_current(idx)
+            self.queue.add(track)
+            self.queue.set_current(0)
         else:
-            # play immediately, insert after current
             self.queue.add_next(track)
             self.queue.set_current(self.queue.current + 1 if self.queue.current >= 0 else len(self.queue.items) - 1)
+        self._refresh_queue_table()
+        self._play_current()
+        # prefetch mix in background for autoplay diversity
+        if self.config.queue.autoplay:
+            self._prefetch_mix(track)
+
+    def _prefetch_mix(self, seed: Track):
+        if self._autoplay_fetching:
+            return
+        self._autoplay_fetching = True
+
+        async def _fetch():
+            try:
+                exclude = {t.id for t in self.queue.items}
+                tracks = await asyncio.to_thread(get_mix_tracks, seed, self.config.queue.mix_limit, exclude)
+                if tracks:
+                    self.queue.extend(tracks)
+                    self._refresh_queue_table()
+            finally:
+                self._autoplay_fetching = False
+
+        asyncio.create_task(_fetch())
+
+    def _play_context(self):
+        """Play all search results as context (old behavior)."""
+        if not self.search_results:
+            return
+        self.queue.clear()
+        for t in self.search_results:
+            self.queue.add(t)
+        self.queue.set_current(0)
         self._refresh_queue_table()
         self._play_current()
 
@@ -140,6 +174,8 @@ class MusicApp(App):
         if not track:
             return
         self.query_one("#now_playing", Label).update(f"▶ {track.title} — {track.channel or ''}")
+        self._was_playing = True
+        self._eof_handled = False
         try:
             self.player.play(track.url)
         except Exception as e:
@@ -155,7 +191,6 @@ class MusicApp(App):
         )
 
     def _poll_player(self):
-        # update progress and auto-next on EOF
         pos = self.player.get_time_pos()
         dur = self.player.get_duration()
         paused = self.player.is_paused()
@@ -163,21 +198,60 @@ class MusicApp(App):
         if dur and pos is not None:
             bar.total = max(1, int(dur))
             bar.progress = int(pos)
-            # auto-next when near end (mpv will idle, we detect eof via idle)
-            if dur - pos < 0.8:
-                # will be handled by next poll if stopped
-                pass
-        # detect stopped (no time-pos but queue has next)
-        if pos is None and dur is None and self.queue.current_track() is not None:
-            # check if mpv is idle (paused None?) — simple: if not paused and pos None -> track ended
-            # try to auto next after 1s delay — we do it via checking that time-pos is None and not paused
-            # To avoid immediate loop, check if player is not paused and we have next
-            # For MVP, just don't auto-advance automatically; user presses n
-            pass
+            self._was_playing = True
+            self._eof_handled = False
+        # detect EOF: mpv idle after playing
+        idle = self.player.is_idle()
+        eof = self.player.eof_reached()
+        is_eof = (eof is True) or (self._was_playing and pos is None and dur is None and idle is True and paused is not True)
+        if is_eof and not self._eof_handled and self.queue.current_track() is not None:
+            self._eof_handled = True
+            self._was_playing = False
+            self._handle_track_end()
+
         status = self.query_one("#status", Label)
         vol = self.player.volume
         sh = "on" if self.queue.shuffle else "off"
-        status.update(f"vol {vol}% | shuffle {sh} | repeat {self.queue.repeat} | {'⏸' if paused else '▶'}")
+        ap = "on" if self.config.queue.autoplay else "off"
+        status.update(f"vol {vol}% | shuffle {sh} | repeat {self.queue.repeat} | autoplay {ap} | {'⏸' if paused else '▶'}")
+
+    def _handle_track_end(self):
+        # repeat one -> replay
+        if self.queue.repeat == "one":
+            self._play_current()
+            return
+        nxt = self.queue.next_idx()
+        if nxt is not None:
+            self.queue.set_current(nxt)
+            self._play_current()
+            return
+        # end of queue -> autoplay mix
+        if self.config.queue.autoplay:
+            cur = self.queue.current_track()
+            if cur and not self._autoplay_fetching:
+                self._autoplay_fetching = True
+
+                async def _fetch_and_play():
+                    try:
+                        exclude = {t.id for t in self.queue.items}
+                        tracks = await asyncio.to_thread(get_mix_tracks, cur, self.config.queue.mix_limit, exclude)
+                        if tracks:
+                            self.queue.extend(tracks)
+                            self._refresh_queue_table()
+                            nxt2 = self.queue.next_idx()
+                            if nxt2 is not None:
+                                self.queue.set_current(nxt2)
+                                self._play_current()
+                            else:
+                                self.query_one("#now_playing", Label).update("Stopped — queue ended")
+                        else:
+                            self.query_one("#now_playing", Label).update("Stopped — queue ended")
+                    finally:
+                        self._autoplay_fetching = False
+
+                asyncio.create_task(_fetch_and_play())
+            return
+        self.query_one("#now_playing", Label).update("Stopped — queue ended")
 
     # Actions
     def action_toggle_help(self):
@@ -225,6 +299,14 @@ class MusicApp(App):
             self.queue.add(self.search_results[idx])
             self._refresh_queue_table()
             self.notify(f"Added to queue: {self.search_results[idx].title[:30]}")
+
+    def action_toggle_autoplay(self):
+        self.config.queue.autoplay = not self.config.queue.autoplay
+        self.notify(f"Autoplay {'on' if self.config.queue.autoplay else 'off'}")
+
+    def action_play_context(self):
+        self._play_context()
+        self.notify("Playing context (all search results)")
 
     def action_toggle_shuffle(self):
         self.queue.shuffle = not self.queue.shuffle

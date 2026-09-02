@@ -14,7 +14,14 @@ class Queue:
     repeat: str = "off"  # off|all|one
 
     def add(self, track: Track):
+        # dedup by id
+        if any(t.id == track.id for t in self.items):
+            return
         self.items.append(track)
+
+    def extend(self, tracks: list[Track]):
+        for t in tracks:
+            self.add(t)
 
     def add_next(self, track: Track):
         if self.current < 0:

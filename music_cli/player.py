@@ -112,6 +112,18 @@ class MpvPlayer:
         v = self.get_property("duration")
         return float(v) if v is not None else None
 
+    def is_idle(self) -> bool | None:
+        v = self.get_property("idle-active")
+        if v is not None:
+            return bool(v)
+        return None
+
+    def eof_reached(self) -> bool | None:
+        v = self.get_property("eof-reached")
+        if v is not None:
+            return bool(v)
+        return None
+
     def terminate(self):
         try:
             if self._proc and self._proc.poll() is None:
