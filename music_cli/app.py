@@ -10,7 +10,7 @@ from textual.widgets import DataTable, Footer, Header, Input, Label, ProgressBar
 from .config import AppConfig
 from .player import MpvPlayer
 from .queue import Queue
-from .search import Track, _fmt_duration, get_mix_tracks, search_ytdlp
+from .search import Track, _fmt_duration, get_mix_tracks
 
 
 HELP_TEXT = """\
@@ -96,7 +96,21 @@ class MusicApp(App):
             return
         event.input.add_class("loading")
         try:
-            tracks = await asyncio.to_thread(search_ytdlp, query, self.config.ui.page_size)
+            # YT Music search first, fallback to yt-dlp
+            def _search(q, lim):
+                try:
+                    from .ytmusic import search_music
+
+                    r = search_music(q, limit=lim)
+                    if r:
+                        return r
+                except Exception:
+                    pass
+                from .search import search_ytdlp
+
+                return search_ytdlp(q, limit=lim)
+
+            tracks = await asyncio.to_thread(_search, query, self.config.ui.page_size)
         except Exception as e:
             self.notify(f"Search error: {e}", severity="error")
             return

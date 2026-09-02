@@ -10,6 +10,7 @@ dependencies = [
     "yt-dlp>=2024.0",
     "textual>=1.0",
     "rich>=13.0",
+    "ytmusicapi>=1.0",
 ]
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff"]
