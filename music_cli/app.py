@@ -22,12 +22,21 @@ HELP_TEXT = """\
 
 class MusicApp(App):
     CSS = """
-    #search_input { height: 3; }
-    #results { height: 1fr; }
-    #queue { height: 1fr; }
-    #playback { height: 5; border: solid $primary; padding: 0 1; }
-    #help { height: 3; color: $text-muted; }
-    DataTable { height: 1fr; }
+    Screen { background: $surface; }
+    Header { background: $primary; color: $text; }
+    #search_input { height: 3; margin: 0 1; border: tall $primary; }
+    #search_input:focus { border: tall $accent; }
+    #left, #right { border: solid $primary 50%; padding: 0 1; background: $panel; }
+    #results_label, #queue_label { text-style: bold; color: $accent; padding: 1 0; }
+    DataTable { height: 1fr; background: $surface; }
+    DataTable > .datatable--header { background: $primary 30%; text-style: bold; }
+    DataTable > .datatable--cursor { background: $accent 30%; }
+    #playback { height: 5; border: heavy $accent; background: $panel; padding: 0 1; }
+    #now_playing { color: $success; text-style: bold; width: 1fr; }
+    #progress { width: 1fr; color: $accent; }
+    #status { color: $text-muted; width: auto; }
+    #help { height: 3; color: $text-muted; background: $surface; }
+    Footer { background: $primary-darken-2; }
     """
 
     BINDINGS = [
@@ -78,12 +87,15 @@ class MusicApp(App):
         yield Footer()
 
     def on_mount(self):
-        for tid, t in [("results", ["#", "Title", "Channel", "Dur"]), ("queue", ["#", "Title", "Channel", "Dur"])]:
+        for tid in ["results", "queue"]:
             dt: DataTable = self.query_one(f"#{tid}", DataTable)
-            for col in t:
-                dt.add_column(col, width=None if col != "Title" else None)
+            dt.add_column("#", width=4)
+            dt.add_column("Title", width=None)
+            dt.add_column("Channel", width=18)
+            dt.add_column("Dur", width=6)
             dt.cursor_type = "row"
             dt.zebra_stripes = True
+            dt.show_header = True
         self.query_one("#search_input", Input).focus()
         self.set_interval(0.5, self._poll_player)
         self.player.start()

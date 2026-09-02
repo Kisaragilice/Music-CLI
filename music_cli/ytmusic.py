@@ -25,7 +25,14 @@ def _yt_to_track(item: dict, video_id_key="videoId") -> Optional[Track]:
         channel = ", ".join(a.get("name", "") for a in arts if a.get("name"))
     if not channel:
         channel = item.get("author") or item.get("artist")
-    dur = item.get("duration_seconds") or item.get("duration") or item.get("lengthSeconds")
+    dur = item.get("duration_seconds") or item.get("duration") or item.get("lengthSeconds") or item.get("length") or item.get("lengthText")
+    # lengthText may be dict
+    if isinstance(dur, dict):
+        # e.g. {"runs":[{"text":"3:22"}]} or {"simpleText":"3:22"}
+        if "simpleText" in dur:
+            dur = dur["simpleText"]
+        elif "runs" in dur and dur["runs"]:
+            dur = dur["runs"][0].get("text", "")
     if isinstance(dur, str) and dur.isdigit():
         dur = int(dur)
     # sometimes duration is "3:45"
