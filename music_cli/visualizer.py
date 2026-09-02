@@ -102,32 +102,31 @@ class AudioVisualizer(Static):
             return None
 
     def _fake_bars(self, t: float) -> list[float]:
-        # Smooth, regular spectrum like spotify-player screenshot:
-        # envelope decays smoothly from bass to treble, animated with slow beats, no high-frequency noise.
-        # Use deterministic smooth waves only (no random) + light smoothing across neighboring bars.
+        # Very smooth, non-random: slow breathing spectrum from bawah ke atas, deterministic
         raw = []
-        beat = 0.5 + 0.5 * math.sin(t * 1.4 + self._phase)  # slow pump 0..1
-        beat2 = 0.5 + 0.5 * math.sin(t * 2.8 + 1.1)
+        # slow breath 0..1, period ~4s
+        breath = 0.5 + 0.5 * math.sin(t * 0.55 + self._phase)
         for i in range(BARS):
-            env = math.exp(-i / 32) * 0.32
-            bump = 0.06 * math.exp(-((i - 18) / 9) ** 2)
+            # stable envelope: tall left, smoothly decay to right
+            env = math.exp(-i / 34) * 0.38
+            bump = 0.05 * math.exp(-((i - 19) / 10) ** 2)
             base = env + bump
-            mod = 0.18 * math.sin(t * 1.0 + i * 0.10 + self._phase) * (1 - i / BARS * 0.5)
-            mod = max(0, mod)
-            pump = beat * 0.08 * math.exp(-i / 16)
-            v = base * (0.75 + mod) + pump
-            # treble quiet
-            if i > 48:
-                v *= 0.55
-            elif i > 36:
-                v *= 0.78
-            raw.append(min(1.0, v))
+            # gentle wave across bars, very slow, phase shifts smoothly
+            wave = 0.10 * math.sin(t * 0.45 + i * 0.08)
+            wave = max(0, wave)
+            # breath affects mostly bass
+            pump = breath * 0.05 * math.exp(-i / 20)
+            v = base * (0.82 + wave) + pump
+            if i > 50:
+                v *= 0.5
+            elif i > 38:
+                v *= 0.75
+            raw.append(min(0.72, v))
+        # stronger smoothing for regularity (5-point)
         smooth = []
         for i in range(BARS):
-            a = raw[max(0, i - 1)]
-            b = raw[i]
-            c = raw[min(BARS - 1, i + 1)]
-            smooth.append((a * 0.25 + b * 0.5 + c * 0.25) * 0.78)
+            vals = [raw[max(0, min(BARS - 1, i + d))] for d in (-2, -1, 0, 1, 2)]
+            smooth.append((vals[0] * 0.1 + vals[1] * 0.2 + vals[2] * 0.4 + vals[3] * 0.2 + vals[4] * 0.1))
         return smooth
 
     def update_state(self, playing: bool, enabled: bool):
@@ -148,7 +147,7 @@ class AudioVisualizer(Static):
             self.targets = self._fake_bars(time.time())
 
         for i in range(BARS):
-            self.bars[i] += (self.targets[i] - self.bars[i]) * 0.35
+            self.bars[i] += (self.targets[i] - self.bars[i]) * 0.18
 
         # Build HEIGHT rows top->bottom with solid blocks
         rows: list[Text] = [Text(no_wrap=True) for _ in range(HEIGHT)]
