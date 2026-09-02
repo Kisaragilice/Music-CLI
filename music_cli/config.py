@@ -28,7 +28,8 @@ class UIConfig:
     page_size: int = 20
     enable_audio_visualization: bool = True
     show_cover: bool = True
-    cover_size: int = 10
+    cover_size: int = 12
+    cover_pixels: int = 32  # 8,16,32,64 like spotify-player pixelate; higher = sharper, lower = more pixelated
 
 
 @dataclass
@@ -70,6 +71,8 @@ class AppConfig:
                     cfg.ui.show_cover = bool(u["show_cover"])
                 if "cover_size" in u:
                     cfg.ui.cover_size = int(u["cover_size"])
+                if "cover_pixels" in u:
+                    cfg.ui.cover_pixels = int(u["cover_pixels"])
                 q = data.get("queue", {})
                 if "autoplay" in q:
                     cfg.queue.autoplay = bool(q["autoplay"])

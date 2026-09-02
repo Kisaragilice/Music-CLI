@@ -10,7 +10,8 @@ page_size = 20
 playback_window_position = "bottom"
 enable_audio_visualization = true
 show_cover = true
-cover_size = 10
+cover_size = 12
+cover_pixels = 64
 
 [queue]
 autoplay = true

@@ -36,7 +36,7 @@ class MusicApp(App):
     DataTable > .datatable--cursor { background: $accent 30%; }
     #playback { height: 13; border: heavy $accent; background: $panel; padding: 0 1; layout: vertical; }
     #playback_top { height: 3; layout: horizontal; }
-    #cover { width: 22; height: 11; border: solid $accent 50%; display: none; }
+    #cover { width: 26; height: 13; border: solid $accent 50%; display: none; }
     #cover.enabled { display: block; }
     #viz { height: 8; color: $accent; text-align: center; display: none; }
     #viz.enabled { display: block; }
@@ -66,6 +66,8 @@ class MusicApp(App):
         Binding("A", "play_context", "Play context"),
         Binding("v", "toggle_viz", "Viz"),
         Binding("i", "toggle_cover", "Cover"),
+        Binding("ctrl+right", "pixels_up", "Pixels+"),
+        Binding("ctrl+left", "pixels_down", "Pixels-"),
     ]
 
     def __init__(self, config: AppConfig | None = None):
@@ -120,6 +122,7 @@ class MusicApp(App):
             viz.remove_class("enabled")
         viz.update_state(False, self.config.ui.enable_audio_visualization)
         cover = self.query_one("#cover", CoverWidget)
+        cover.set_pixels(self.config.ui.cover_pixels)
         if self.config.ui.show_cover:
             cover.add_class("enabled")
             cover.set_enabled(True)
@@ -346,7 +349,6 @@ class MusicApp(App):
         if self.config.ui.show_cover:
             cover.add_class("enabled")
             cover.set_enabled(True)
-            # re-fetch current
             cur = self.queue.current_track()
             if cur and cur.thumbnail:
                 def _cb(path):
@@ -357,6 +359,16 @@ class MusicApp(App):
             cover.remove_class("enabled")
             cover.set_enabled(False)
         self.notify(f"Cover {'on' if self.config.ui.show_cover else 'off'}")
+
+    def action_pixels_up(self):
+        self.config.ui.cover_pixels = min(128, self.config.ui.cover_pixels * 2)
+        self.query_one("#cover", CoverWidget).set_pixels(self.config.ui.cover_pixels)
+        self.notify(f"Pixels {self.config.ui.cover_pixels}")
+
+    def action_pixels_down(self):
+        self.config.ui.cover_pixels = max(8, self.config.ui.cover_pixels // 2)
+        self.query_one("#cover", CoverWidget).set_pixels(self.config.ui.cover_pixels)
+        self.notify(f"Pixels {self.config.ui.cover_pixels}")
 
     def action_next(self):
         nxt = self.queue.next_idx()
