@@ -11,6 +11,7 @@ dependencies = [
     "textual>=1.0",
     "rich>=13.0",
     "ytmusicapi>=1.0",
+    "numpy>=1.20",
 ]
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff"]

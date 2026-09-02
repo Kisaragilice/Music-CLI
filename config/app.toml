@@ -8,6 +8,7 @@ ytdl_format = "bestaudio/best"
 theme = "default"
 page_size = 20
 playback_window_position = "bottom"
+enable_audio_visualization = true
 
 [queue]
 autoplay = true

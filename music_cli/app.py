@@ -11,11 +11,12 @@ from .config import AppConfig
 from .player import MpvPlayer
 from .queue import Queue
 from .search import Track, _fmt_duration, get_mix_tracks
+from .visualizer import AudioVisualizer
 
 
 HELP_TEXT = """\
 [q] quit  [?] help  [enter] play(single+mix)  [A] play context  [space] pause  [n] next  [p] prev
-[+/-] vol  [</>] seek 5s  [z] queue  [s] shuffle  [r] repeat  [c] clear  [a] autoplay toggle
+[+/-] vol  [</>] seek 5s  [z] queue  [s] shuffle  [r] repeat  [c] clear  [a] autoplay  [v] viz
 [/] focus search  [j/k] nav
 """
 
@@ -31,7 +32,10 @@ class MusicApp(App):
     DataTable { height: 1fr; background: $surface; }
     DataTable > .datatable--header { background: $primary 30%; text-style: bold; }
     DataTable > .datatable--cursor { background: $accent 30%; }
-    #playback { height: 5; border: heavy $accent; background: $panel; padding: 0 1; }
+    #playback { height: 7; border: heavy $accent; background: $panel; padding: 0 1; layout: vertical; }
+    #playback_top { height: 3; layout: horizontal; }
+    #viz { height: 2; color: $accent; text-align: center; display: none; }
+    #viz.enabled { display: block; }
     #now_playing { color: $success; text-style: bold; width: 1fr; }
     #progress { width: 1fr; color: $accent; }
     #status { color: $text-muted; width: auto; }
@@ -56,6 +60,7 @@ class MusicApp(App):
         Binding("slash", "focus_search", "Search"),
         Binding("a", "toggle_autoplay", "Autoplay"),
         Binding("A", "play_context", "Play context"),
+        Binding("v", "toggle_viz", "Viz"),
     ]
 
     def __init__(self, config: AppConfig | None = None):
@@ -79,10 +84,12 @@ class MusicApp(App):
             with Vertical(id="right"):
                 yield Label("Queue", id="queue_label")
                 yield DataTable(id="queue")
-        with Horizontal(id="playback"):
-            yield Label("Stopped", id="now_playing")
-            yield ProgressBar(id="progress", total=100, show_eta=False)
-            yield Label("vol 70% | shuffle off | repeat off", id="status")
+        with Vertical(id="playback"):
+            with Horizontal(id="playback_top"):
+                yield Label("Stopped", id="now_playing")
+                yield ProgressBar(id="progress", total=100, show_eta=False)
+                yield Label("vol 70% | shuffle off | repeat off", id="status")
+            yield AudioVisualizer(id="viz")
         yield Static(HELP_TEXT, id="help")
         yield Footer()
 
@@ -99,6 +106,13 @@ class MusicApp(App):
         self.query_one("#search_input", Input).focus()
         self.set_interval(0.5, self._poll_player)
         self.player.start()
+        # viz visibility per config
+        viz = self.query_one("#viz", AudioVisualizer)
+        if self.config.ui.enable_audio_visualization:
+            viz.add_class("enabled")
+        else:
+            viz.remove_class("enabled")
+        viz.update_state(False, self.config.ui.enable_audio_visualization)
 
     async def on_input_submitted(self, event: Input.Submitted):
         if event.input.id != "search_input":
@@ -204,6 +218,7 @@ class MusicApp(App):
         self._eof_handled = False
         try:
             self.player.play(track.url)
+            self.query_one("#viz", AudioVisualizer).update_state(True, self.config.ui.enable_audio_visualization)
         except Exception as e:
             self.notify(f"Play error: {e}", severity="error")
 
@@ -240,6 +255,11 @@ class MusicApp(App):
         sh = "on" if self.queue.shuffle else "off"
         ap = "on" if self.config.queue.autoplay else "off"
         status.update(f"vol {vol}% | shuffle {sh} | repeat {self.queue.repeat} | autoplay {ap} | {'⏸' if paused else '▶'}")
+        # update viz playing state
+        try:
+            self.query_one("#viz", AudioVisualizer).update_state(not paused and dur is not None and pos is not None, self.config.ui.enable_audio_visualization)
+        except Exception:
+            pass
 
     def _handle_track_end(self):
         # repeat one -> replay
@@ -287,6 +307,16 @@ class MusicApp(App):
 
     def action_pause(self):
         self.player.pause_toggle()
+        # viz reflects pause via poll
+
+    def action_toggle_viz(self):
+        self.config.ui.enable_audio_visualization = not self.config.ui.enable_audio_visualization
+        viz = self.query_one("#viz", AudioVisualizer)
+        if self.config.ui.enable_audio_visualization:
+            viz.add_class("enabled")
+        else:
+            viz.remove_class("enabled")
+        self.notify(f"Visualization {'on' if self.config.ui.enable_audio_visualization else 'off'}")
 
     def action_next(self):
         nxt = self.queue.next_idx()

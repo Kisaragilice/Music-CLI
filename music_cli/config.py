@@ -26,6 +26,7 @@ class UIConfig:
     playback_window_position: str = "bottom"  # top|bottom
     theme: str = "default"
     page_size: int = 20
+    enable_audio_visualization: bool = True
 
 
 @dataclass
@@ -61,6 +62,8 @@ class AppConfig:
                     cfg.ui.theme = str(u["theme"])
                 if "page_size" in u:
                     cfg.ui.page_size = int(u["page_size"])
+                if "enable_audio_visualization" in u:
+                    cfg.ui.enable_audio_visualization = bool(u["enable_audio_visualization"])
                 q = data.get("queue", {})
                 if "autoplay" in q:
                     cfg.queue.autoplay = bool(q["autoplay"])
