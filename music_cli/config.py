@@ -29,7 +29,7 @@ class UIConfig:
     enable_audio_visualization: bool = True
     show_cover: bool = True
     cover_size: int = 12
-    cover_pixels: int = 32  # 8,16,32,64 like spotify-player pixelate; higher = sharper, lower = more pixelated
+    cover_pixels: int = 512  # like spotify-player cover_img_pixels, 8..720 (512 default ultra-sharp, 8 pixelated)
 
 
 @dataclass

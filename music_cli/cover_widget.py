@@ -16,11 +16,11 @@ class CoverWidget(Static):
         self._enabled = True
         self._w_cells = 24
         self._h_cells = 12
-        self._pixels = 32
+        self._pixels = 512
         self._is_kitty = "kitty" in os.environ.get("TERM", "") or bool(os.environ.get("KITTY_WINDOW_ID"))
 
     def set_pixels(self, pixels: int):
-        self._pixels = max(4, min(128, pixels))
+        self._pixels = max(4, min(720, pixels))
         self.update(self.render())
 
     def set_cover(self, path: Path | None):
@@ -36,11 +36,15 @@ class CoverWidget(Static):
             from PIL import Image
 
             im = Image.open(path).convert("RGB")
-            # pixelate: downscale to pixels x pixels with NEAREST then upscale to blocks
             if self._pixels < 64:
-                # keep aspect square
                 small = im.resize((self._pixels, self._pixels), Image.NEAREST)
                 im = small.resize((self._w_cells * 6, self._h_cells * 12), Image.NEAREST)
+            elif self._pixels <= 128:
+                # normal sharp
+                pass
+            else:
+                # 256-720 ultra-sharp: keep high-res (bypass extra downscale)
+                pass
             w, h = self._w_cells, self._h_cells * 2
             im = im.resize((w, h), Image.LANCZOS if self._pixels >= 64 else Image.NEAREST)
             lines = []

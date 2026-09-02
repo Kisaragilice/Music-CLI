@@ -361,14 +361,21 @@ class MusicApp(App):
         self.notify(f"Cover {'on' if self.config.ui.show_cover else 'off'}")
 
     def action_pixels_up(self):
-        self.config.ui.cover_pixels = min(128, self.config.ui.cover_pixels * 2)
-        self.query_one("#cover", CoverWidget).set_pixels(self.config.ui.cover_pixels)
-        self.notify(f"Pixels {self.config.ui.cover_pixels}")
+        # step 8->16->32->64->128->256->512->720
+        table = [8, 16, 32, 64, 128, 256, 512, 720]
+        cur = self.config.ui.cover_pixels
+        nxt = next((v for v in table if v > cur), 720)
+        self.config.ui.cover_pixels = nxt
+        self.query_one("#cover", CoverWidget).set_pixels(nxt)
+        self.notify(f"Pixels {nxt}")
 
     def action_pixels_down(self):
-        self.config.ui.cover_pixels = max(8, self.config.ui.cover_pixels // 2)
-        self.query_one("#cover", CoverWidget).set_pixels(self.config.ui.cover_pixels)
-        self.notify(f"Pixels {self.config.ui.cover_pixels}")
+        table = [8, 16, 32, 64, 128, 256, 512, 720]
+        cur = self.config.ui.cover_pixels
+        prv = next((v for v in reversed(table) if v < cur), 8)
+        self.config.ui.cover_pixels = prv
+        self.query_one("#cover", CoverWidget).set_pixels(prv)
+        self.notify(f"Pixels {prv}")
 
     def action_next(self):
         nxt = self.queue.next_idx()
