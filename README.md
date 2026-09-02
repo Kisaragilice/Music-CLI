@@ -313,4 +313,4 @@ Built with [Textual](https://github.com/Textualize/textual), [yt-dlp](https://gi
 
 ## License
 
-MIT — see [LICENSE](LICENSE) (add your license file).
+MIT — see [LICENSE](LICENSE)
