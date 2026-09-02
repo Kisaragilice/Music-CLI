@@ -1,0 +1,10 @@
+# music-cli config — inspired by spotify-player app.toml
+[player]
+volume = 70
+seek_secs = 5
+ytdl_format = "bestaudio/best"
+
+[ui]
+theme = "default"
+page_size = 20
+playback_window_position = "bottom"

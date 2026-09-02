@@ -1,0 +1,28 @@
+[project]
+name = "music-cli"
+version = "0.1.0"
+description = "CLI streaming music player via yt-dlp + mpv, inspired by spotify-player"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Music-CLI" }]
+dependencies = [
+    "yt-dlp>=2024.0",
+    "textual>=1.0",
+    "rich>=13.0",
+]
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff"]
+
+[project.scripts]
+music-cli = "music_cli.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
