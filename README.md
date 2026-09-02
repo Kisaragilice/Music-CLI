@@ -138,7 +138,7 @@ yt-dlp -U                     # if installed via pipx
 pipx uninstall music-cli
 ```
 
-#### AUR (if you publish)
+#### AUR (not available)
 
 ```bash
 yay -S music-cli          # AUR helper
