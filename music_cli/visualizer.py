@@ -15,28 +15,26 @@ except Exception:
     HAS_NUMPY = False
 
 BARS = 64
-HEIGHT = 6  # rows tall like spotify-player screenshot
-# Color gradient bass green -> cyan -> blue
+HEIGHT = 8  # match spotify-player screenshot (taller)
 GRAD = [
-    "#12c46b",
-    "#18c77a",
-    "#1fd089",
-    "#2ad4b0",
-    "#2ac4d6",
-    "#2aa8e6",
-    "#2a8de6",
-    "#2a6de6",
+    "#1DB954",  # spotify green bass
+    "#1ED760",
+    "#2BC4A0",
+    "#33B5C8",
+    "#3AA0D6",
+    "#3D8BDF",
+    "#3A6FE3",
+    "#2E5CE6",  # blue treble
 ]
 
 
 def _interp_color(i: int) -> str:
-    # map bar index 0..63 to gradient
     idx = int(i / BARS * (len(GRAD) - 1))
     return GRAD[idx]
 
 
 class AudioVisualizer(Static):
-    """64 log-scale bars, multi-row colored, like spotify-player."""
+    """64 log-scale bars bottom-up, like spotify-player screenshot."""
 
     def __init__(self, **kwargs):
         super().__init__("", **kwargs)
@@ -44,7 +42,7 @@ class AudioVisualizer(Static):
         self.targets = [0.0] * BARS
         self.enabled = True
         self.playing = False
-        self._phase = random.random() * 10
+        self._phase = random.random() * 6
         self._pcm_proc = None
         self._try_start_capture()
 
@@ -72,7 +70,6 @@ class AudioVisualizer(Static):
         try:
             import select
 
-            # non-blocking peek
             ready, _, _ = select.select([self._pcm_proc.stdout], [], [], 0)
             if not ready:
                 return None
@@ -87,46 +84,54 @@ class AudioVisualizer(Static):
             n = len(spectrum)
             out: list[float] = []
             for i in range(BARS):
-                # log spaced: more resolution at low freq
-                f0 = math.pow(10, i / BARS * 3)  # 1..1000
+                f0 = math.pow(10, i / BARS * 3)
                 f1 = math.pow(10, (i + 1) / BARS * 3)
                 s = int(f0 / 1000 * n)
                 e = int(f1 / 1000 * n)
                 s = max(0, min(n - 1, s))
                 e = max(s + 1, min(n, e))
                 band = float(np.mean(spectrum[s:e]))
-                band = min(1.0, band * 10 * (1.2 - i / BARS * 0.5))
+                band = min(1.0, band * 10 * (1.25 - i / BARS * 0.6))
                 out.append(band)
             return out
         except Exception:
             return None
 
     def _fake_bars(self, t: float) -> list[float]:
-        # Very smooth, non-random: slow breathing spectrum from bawah ke atas, deterministic
-        raw = []
-        # slow breath 0..1, period ~4s
-        breath = 0.5 + 0.5 * math.sin(t * 0.55 + self._phase)
+        # Recreate screenshot shape: bass tall (green), peak at ~19-21 (brown highlight), slope down to treble low (blue)
+        # Screenshot timeline 0:31/3:39 stable, not chaotic
+        raw: list[float] = []
+        # very slow breath to vary height slightly, not jitter
+        breath = 0.5 + 0.5 * math.sin(t * 0.45 + self._phase)
+        # second harmonic for gentle motion
+        sway = 0.5 + 0.5 * math.sin(t * 0.78 + 1.2)
         for i in range(BARS):
-            # stable envelope: tall left, smoothly decay to right
-            env = math.exp(-i / 34) * 0.38
-            bump = 0.05 * math.exp(-((i - 19) / 10) ** 2)
-            base = env + bump
-            # gentle wave across bars, very slow, phase shifts smoothly
-            wave = 0.10 * math.sin(t * 0.45 + i * 0.08)
-            wave = max(0, wave)
-            # breath affects mostly bass
-            pump = breath * 0.05 * math.exp(-i / 20)
-            v = base * (0.82 + wave) + pump
-            if i > 50:
-                v *= 0.5
-            elif i > 38:
-                v *= 0.75
-            raw.append(min(0.72, v))
-        # stronger smoothing for regularity (5-point)
-        smooth = []
+            # log envelope: high bass, fast decay
+            env = math.exp(-i / 26) * 0.52
+            peak = 0.28 * math.exp(-((i - 20) / 3.5) ** 2)
+            # secondary smaller bumps at 6-8 and 32
+            bump2 = 0.08 * math.exp(-((i - 7) / 5) ** 2)
+            bump3 = 0.05 * math.exp(-((i - 34) / 7) ** 2)
+            base = env + peak + bump2 + bump3
+            # slow sway scales bass/mid, not treble
+            mod = (0.10 * math.sin(t * 0.35 + i * 0.06) + 0.06 * math.sin(t * 0.85 - i * 0.04))
+            mod = max(-0.08, mod)
+            pump = breath * 0.06 * math.exp(-i / 22)
+            pump2 = sway * 0.04 * math.exp(-((i - 20) / 12) ** 2)  # peak breathes
+            v = base * (0.92 + mod) + pump + pump2
+            if i > 52:
+                v *= 0.45
+            elif i > 42:
+                v *= 0.68
+            elif i > 30:
+                v *= 0.85
+            raw.append(min(0.98, v))
+        # 5-point smoothing for regularity (no random)
+        smooth: list[float] = []
         for i in range(BARS):
             vals = [raw[max(0, min(BARS - 1, i + d))] for d in (-2, -1, 0, 1, 2)]
-            smooth.append((vals[0] * 0.1 + vals[1] * 0.2 + vals[2] * 0.4 + vals[3] * 0.2 + vals[4] * 0.1))
+            s = vals[0] * 0.08 + vals[1] * 0.18 + vals[2] * 0.48 + vals[3] * 0.18 + vals[4] * 0.08
+            smooth.append(s)
         return smooth
 
     def update_state(self, playing: bool, enabled: bool):
@@ -137,28 +142,24 @@ class AudioVisualizer(Static):
 
     def render(self) -> Text:
         if not self.enabled or not self.playing:
-            # return empty with height to keep layout but transparent
             return Text("\n" * (HEIGHT - 1), no_wrap=True)
-
         real = self._read_pcm_and_fft()
         if real and any(v > 0.02 for v in real):
             self.targets = real
         else:
             self.targets = self._fake_bars(time.time())
-
         for i in range(BARS):
-            self.bars[i] += (self.targets[i] - self.bars[i]) * 0.18
-
-        # Build HEIGHT rows top->bottom with solid blocks
+            self.bars[i] += (self.targets[i] - self.bars[i]) * 0.22
         rows: list[Text] = [Text(no_wrap=True) for _ in range(HEIGHT)]
         for i, v in enumerate(self.bars):
-            h = int(v * HEIGHT + 0.5)  # 0..HEIGHT
+            h = int(v * HEIGHT + 0.5)
             col = _interp_color(i)
+            # dim treble slightly
+            if i > 45 and h > 0:
+                h = max(1, h - 1)
             for r in range(HEIGHT):
-                # r=0 top, r=HEIGHT-1 bottom
                 filled = (HEIGHT - r) <= h
                 ch = "█" if filled else " "
-                # bass glows brighter at bottom: add style
                 style = col if filled else ""
                 rows[r].append(ch, style=style)
         txt = Text(no_wrap=True)
@@ -169,7 +170,7 @@ class AudioVisualizer(Static):
         return txt
 
     def on_mount(self):
-        self.set_interval(0.05, self._tick)  # 20 fps
+        self.set_interval(0.06, self._tick)
 
     def _tick(self):
         if not self.enabled:
