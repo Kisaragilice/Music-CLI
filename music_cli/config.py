@@ -27,6 +27,8 @@ class UIConfig:
     theme: str = "default"
     page_size: int = 20
     enable_audio_visualization: bool = True
+    show_cover: bool = True
+    cover_size: int = 10
 
 
 @dataclass
@@ -64,6 +66,10 @@ class AppConfig:
                     cfg.ui.page_size = int(u["page_size"])
                 if "enable_audio_visualization" in u:
                     cfg.ui.enable_audio_visualization = bool(u["enable_audio_visualization"])
+                if "show_cover" in u:
+                    cfg.ui.show_cover = bool(u["show_cover"])
+                if "cover_size" in u:
+                    cfg.ui.cover_size = int(u["cover_size"])
                 q = data.get("queue", {})
                 if "autoplay" in q:
                     cfg.queue.autoplay = bool(q["autoplay"])

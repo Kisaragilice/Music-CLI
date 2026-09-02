@@ -8,6 +8,8 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Header, Input, Label, ProgressBar, Static
 
 from .config import AppConfig
+from .cover import fetch_cover_async
+from .cover_widget import CoverWidget
 from .player import MpvPlayer
 from .queue import Queue
 from .search import Track, _fmt_duration, get_mix_tracks
@@ -16,7 +18,7 @@ from .visualizer import AudioVisualizer
 
 HELP_TEXT = """\
 [q] quit  [?] help  [enter] play(single+mix)  [A] play context  [space] pause  [n] next  [p] prev
-[+/-] vol  [</>] seek 5s  [z] queue  [s] shuffle  [r] repeat  [c] clear  [a] autoplay  [v] viz
+[+/-] vol  [</>] seek 5s  [z] queue  [s] shuffle  [r] repeat  [c] clear  [a] autoplay  [v] viz  [i] cover
 [/] focus search  [j/k] nav
 """
 
@@ -32,8 +34,10 @@ class MusicApp(App):
     DataTable { height: 1fr; background: $surface; }
     DataTable > .datatable--header { background: $primary 30%; text-style: bold; }
     DataTable > .datatable--cursor { background: $accent 30%; }
-    #playback { height: 11; border: heavy $accent; background: $panel; padding: 0 1; layout: vertical; }
+    #playback { height: 13; border: heavy $accent; background: $panel; padding: 0 1; layout: vertical; }
     #playback_top { height: 3; layout: horizontal; }
+    #cover { width: 22; height: 11; border: solid $accent 50%; display: none; }
+    #cover.enabled { display: block; }
     #viz { height: 8; color: $accent; text-align: center; display: none; }
     #viz.enabled { display: block; }
     #now_playing { color: $success; text-style: bold; width: 1fr; }
@@ -61,6 +65,7 @@ class MusicApp(App):
         Binding("a", "toggle_autoplay", "Autoplay"),
         Binding("A", "play_context", "Play context"),
         Binding("v", "toggle_viz", "Viz"),
+        Binding("i", "toggle_cover", "Cover"),
     ]
 
     def __init__(self, config: AppConfig | None = None):
@@ -84,12 +89,14 @@ class MusicApp(App):
             with Vertical(id="right"):
                 yield Label("Queue", id="queue_label")
                 yield DataTable(id="queue")
-        with Vertical(id="playback"):
-            with Horizontal(id="playback_top"):
-                yield Label("Stopped", id="now_playing")
-                yield ProgressBar(id="progress", total=100, show_eta=False)
-                yield Label("vol 70% | shuffle off | repeat off", id="status")
-            yield AudioVisualizer(id="viz")
+        with Horizontal(id="playback_row"):
+            yield CoverWidget(id="cover")
+            with Vertical(id="playback"):
+                with Horizontal(id="playback_top"):
+                    yield Label("Stopped", id="now_playing")
+                    yield ProgressBar(id="progress", total=100, show_eta=False)
+                    yield Label("vol 70% | shuffle off | repeat off", id="status")
+                yield AudioVisualizer(id="viz")
         yield Static(HELP_TEXT, id="help")
         yield Footer()
 
@@ -106,13 +113,19 @@ class MusicApp(App):
         self.query_one("#search_input", Input).focus()
         self.set_interval(0.5, self._poll_player)
         self.player.start()
-        # viz visibility per config
         viz = self.query_one("#viz", AudioVisualizer)
         if self.config.ui.enable_audio_visualization:
             viz.add_class("enabled")
         else:
             viz.remove_class("enabled")
         viz.update_state(False, self.config.ui.enable_audio_visualization)
+        cover = self.query_one("#cover", CoverWidget)
+        if self.config.ui.show_cover:
+            cover.add_class("enabled")
+            cover.set_enabled(True)
+        else:
+            cover.remove_class("enabled")
+            cover.set_enabled(False)
 
     async def on_input_submitted(self, event: Input.Submitted):
         if event.input.id != "search_input":
@@ -219,6 +232,15 @@ class MusicApp(App):
         try:
             self.player.play(track.url)
             self.query_one("#viz", AudioVisualizer).update_state(True, self.config.ui.enable_audio_visualization)
+            # cover fetch async
+            cover = self.query_one("#cover", CoverWidget)
+            if self.config.ui.show_cover and track.thumbnail:
+                def _cb(path):
+                    self.call_from_thread(cover.set_cover, path)
+
+                fetch_cover_async(track.thumbnail, _cb, size=self.config.ui.cover_size * 12)
+            else:
+                cover.set_cover(None)
         except Exception as e:
             self.notify(f"Play error: {e}", severity="error")
 
@@ -317,6 +339,24 @@ class MusicApp(App):
         else:
             viz.remove_class("enabled")
         self.notify(f"Visualization {'on' if self.config.ui.enable_audio_visualization else 'off'}")
+
+    def action_toggle_cover(self):
+        self.config.ui.show_cover = not self.config.ui.show_cover
+        cover = self.query_one("#cover", CoverWidget)
+        if self.config.ui.show_cover:
+            cover.add_class("enabled")
+            cover.set_enabled(True)
+            # re-fetch current
+            cur = self.queue.current_track()
+            if cur and cur.thumbnail:
+                def _cb(path):
+                    self.call_from_thread(cover.set_cover, path)
+
+                fetch_cover_async(cur.thumbnail, _cb, size=self.config.ui.cover_size * 12)
+        else:
+            cover.remove_class("enabled")
+            cover.set_enabled(False)
+        self.notify(f"Cover {'on' if self.config.ui.show_cover else 'off'}")
 
     def action_next(self):
         nxt = self.queue.next_idx()
