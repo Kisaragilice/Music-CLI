@@ -1,6 +1,6 @@
 # Music-CLI
 
-fast, keyboard-driven terminal music player — streaming via `yt-dlp` + `mpv`, inspired by [`spotify-player`](https://github.com/aome510/spotify-player).
+A fast, keyboard-driven terminal music player — streaming via `yt-dlp` + `mpv`, inspired by [`spotify-player`](https://github.com/aome510/spotify-player).
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square" alt="Python 3.11+" />
